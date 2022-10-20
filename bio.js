@@ -86,7 +86,8 @@ const updateBio = (bioMap, updatedBio) => {
 
 const deleteBio = (bioMap, name) => {
   if (nameExists(bioMap, name) === false) throw new Error('Name does not exist')
-  return bioMap.delete(name.toUpperCase())
+  bioMap.delete(name.toUpperCase())
+  return bioMap.values()
 }
 
 const readCSVFile = (filePath) => {
@@ -174,7 +175,8 @@ Weight is ${readBio(dataMap, nameArg).weight} in pounds and ${readBio(dataMap, n
     }
     case '-d': {
       validArgument('-d', nameArg, sexArg, ageArg, heightArg, weightArg)
-      writeCSVFile('biostats.csv', Array.from(deleteBio(dataMap, nameArg).values()))
+      const bioDeleted = Array.from(deleteBio(dataMap, nameArg))
+      writeCSVFile('biostats.csv', bioDeleted)
       console.log('Deleted File Successfully')
       break
     }
