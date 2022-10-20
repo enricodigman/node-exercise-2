@@ -2,53 +2,92 @@ const fs = require('fs')
 const csvjson = require('csvjson')
 
 const [,, option, nameArg, sexArg, ageArg, heightArg, weightArg] = process.argv
-let viewFile = []
 
 class Bio {
   constructor(name, sex, age, height, weight) {
-    this.name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase()
+    this.name = name.charAt(0).toUpperCase() + name.substr(1).toLowerCase()
     this.sex = sex.toUpperCase()
     this.age = Number(age)
     this.height = Number(height)
     this.weight = Number(weight)
   }
-}
 
-const createBioFile = (bioArray, newBio) => {
-  const newFile = [...bioArray, newBio]
-  return newFile
-}
-
-const readBioFile = (bioArray, name) => {
-  for (let i = 0; i < bioArray.length; i += 1) {
-    if (bioArray[i].name.toUpperCase() === name.toUpperCase()) {
-      viewFile = bioArray[i]
-    }
+  nameValid() {
+    return typeof this.name === 'string'
   }
-  return viewFile
+
+  sexValid() {
+    return typeof this.sex === 'string'
+    && 'FM'.includes(this.sex.toUpperCase())
+  }
+
+  ageValid() {
+    return Number(this.age) && this.age >= 18
+  }
+
+  heightValid() {
+    return Number(this.age)
+  }
+
+  weightValid() {
+    return Number(this.age)
+  }
+
+  propertiesValid() {
+    let invalid = []
+
+    if (!this.nameValid()) {
+      invalid = [...invalid, 'name']
+    }
+
+    if (!this.sexValid()) {
+      invalid = [...invalid, 'sex']
+    }
+
+    if (!this.ageValid()) {
+      invalid = [...invalid, 'age']
+    }
+
+    if (!this.heightValid()) {
+      invalid = [...invalid, 'height']
+    }
+
+    if (!this.weightValid()) {
+      invalid = [...invalid, 'weight']
+    }
+
+    return invalid.length ? invalid.join(', ') : 'VALID'
+  }
 }
 
-const updateBioFile = (bioArray, updateBio) => {
-  let foundAt = 0
-  for (let i = 0; i < bioArray.length; i += 1) {
-    if (bioArray[i].name.toUpperCase() === updateBio.name) {
-      foundAt = i
-    }
+const nameExists = (dataMap, name) => {
+  const keys = [...dataMap.keys()]
+  if (keys.includes(name.toUpperCase())) {
+    return true
   }
-  bioArray.splice(foundAt, 1, updateBio)
-  return bioArray
+  return false
 }
 
-const deleteBioFile = (bioArray, name) => {
-  let foundAt = 0
-  for (let i = 0; i < bioArray.length; i += 1) {
-    if (bioArray[i].name.toUpperCase() === name.toUpperCase()) {
-      foundAt = i
-      break
-    }
-  }
-  bioArray.splice(foundAt, 1)
-  return bioArray
+const createBio = (bioMap, newBio) => {
+  if (nameExists(bioMap, newBio.name) === true) throw new Error('Name exists')
+  const newBioMap = bioMap.set(newBio.name, newBio)
+  return newBioMap
+}
+
+const readBio = (bioMap, name) => {
+  if (nameExists(bioMap, name) === false) throw new Error('Name does not exist')
+  return bioMap.get(name.toUpperCase()) || null
+}
+
+const updateBio = (bioMap, updatedBio) => {
+  if (nameExists(bioMap, updatedBio.name) === false) throw new Error('Name does not exist')
+  return bioMap.set(updatedBio.name.toUpperCase(), updatedBio)
+}
+
+const deleteBio = (bioMap, name) => {
+  if (nameExists(bioMap, name) === false) throw new Error('Name does not exist')
+  bioMap.delete(name.toUpperCase())
+  return bioMap.values()
 }
 
 const readCSVFile = (filePath) => {
@@ -62,135 +101,89 @@ const readCSVFile = (filePath) => {
 
 const writeCSVFile = (filePath, bioDetails) => {
   try {
-    fs.writeFileSync(filePath, csvjson.toCSV(bioDetails, { headers: 'key' }))
+    fs.writeFileSync(filePath, csvjson.toCSV(bioDetails, { headers: 'key', delimiter: ',\t\t\t\t\t\t\t' }))
   } catch (err) {
     console.error('Failure')
   }
 }
 
-const data = readCSVFile('biostats.csv')
+const createBioObject = (name, sex, age, height, weight) => {
+  const newBioObject = new Bio(name, sex, age, height, weight)
 
-if (option === undefined) {
-  console.log('Missing argument')
-  process.exit(1)
-}
-if (option !== '-c' && option !== '-r' && option !== '-u' && option !== '-d') {
-  console.log('Incorrect flag')
-  process.exit(1)
-}
-if (option === '-c') {
-  if (nameArg === undefined || sexArg === undefined || ageArg === undefined
-    || heightArg === undefined || weightArg === undefined || process.argv.length > 8) {
-    console.log('Cannot perform option with inputted arguments.')
-    process.exit(1)
+  if (newBioObject.propertiesValid() !== 'VALID') {
+    throw new Error('Invalid inputted values')
   }
-  let found = 0
-  for (let i = 0; i < data.length; i += 1) {
-    if (data[i].name.toUpperCase() === nameArg.toUpperCase()) {
-      found = 1
+  return newBioObject
+}
+
+const validArgument = (opt, nameArgu, sexArgu, ageArgu, heightArgu, weightArgu) => {
+  if ((opt === '-c' || opt === '-u') && (nameArgu === undefined || sexArgu === undefined
+  || ageArgu === undefined || heightArgu === undefined || weightArgu === undefined)) {
+    throw new Error('Incomplete arguments.')
+  }
+  if ((option === '-r' || option === '-d') && (sexArgu !== undefined
+    || ageArgu !== undefined || heightArgu !== undefined || weightArgu !== undefined)) {
+    throw new Error('Too much arguments.')
+  }
+  return true
+}
+
+try {
+  const data = readCSVFile('biostats.csv')
+  const dataMap = new Map()
+  data.forEach((object) => {
+    dataMap.set(object.name.toUpperCase(), object)
+  })
+  switch (option) {
+    case '-c': {
+      validArgument('-c', nameArg, sexArg, ageArg, heightArg, weightArg)
+      const bioDetails = createBio(dataMap, createBioObject(
+        nameArg,
+        sexArg,
+        ageArg,
+        heightArg,
+        weightArg,
+      ))
+      const values = Array.from(bioDetails.values())
+      writeCSVFile('biostats.csv', values)
+      console.log('Created File Successfully')
+      break
+    }
+    case '-r': {
+      validArgument('-r', nameArg, sexArg, ageArg, heightArg, weightArg)
+      if (readBio(dataMap, nameArg) !== null) {
+        console.log(`Name: ${readBio(dataMap, nameArg).name} 
+Age: ${readBio(dataMap, nameArg).age} years old 
+Sex: ${readBio(dataMap, nameArg).sex === 'f'.toLowerCase() ? 'female' : 'male'}
+Height is ${readBio(dataMap, nameArg).height} in inches and ${readBio(dataMap, nameArg).height * 2.54} in centimeters.
+Weight is ${readBio(dataMap, nameArg).weight} in pounds and ${readBio(dataMap, nameArg).weight * 0.45359237} in kilograms.`)
+      }
+      break
+    }
+    case '-u': {
+      validArgument('-u', nameArg, sexArg, ageArg, heightArg, weightArg)
+      const updatedDetails = updateBio(dataMap, createBioObject(
+        nameArg,
+        sexArg,
+        ageArg,
+        heightArg,
+        weightArg,
+      ))
+      writeCSVFile('biostats.csv', Array.from(updatedDetails.values()))
+      console.log('Updated File Successfully')
+      break
+    }
+    case '-d': {
+      validArgument('-d', nameArg, sexArg, ageArg, heightArg, weightArg)
+      const bioDeleted = Array.from(deleteBio(dataMap, nameArg))
+      writeCSVFile('biostats.csv', bioDeleted)
+      console.log('Deleted File Successfully')
+      break
+    }
+    default: {
+      throw new Error('Invalid flag')
     }
   }
-  if (found === 1) {
-    console.log('Name already exist')
-    process.exit(1)
-  }
-  if (sexArg !== 'f' && sexArg !== 'F' && sexArg !== 'm' && sexArg !== 'M') {
-    console.log('Incorrect sex')
-    process.exit(1)
-  }
-  if (!(ageArg >= 18)) {
-    console.log('Age not a number or underaged')
-    process.exit(1)
-  }
-  if (!(Number(heightArg))) {
-    console.log('Height not a number')
-    process.exit(1)
-  }
-  if (!(Number(weightArg))) {
-    console.log('Weight not a number')
-    process.exit(1)
-  }
-  const bioDetails = createBioFile(data, new Bio(nameArg, sexArg, ageArg, heightArg, weightArg))
-  if (bioDetails !== null) {
-    writeCSVFile('biostats.csv', bioDetails)
-    console.log('Created File Successfully')
-  }
-}
-if (option === '-r') {
-  if (nameArg === undefined || process.argv.length > 4) {
-    console.log('Cannot perform option with inputted arguments.')
-    process.exit(1)
-  }
-  let found = 0
-  for (let i = 0; i < data.length; i += 1) {
-    if (data[i].name.toUpperCase() === nameArg.toUpperCase()) {
-      found = 1
-    }
-  }
-  if (found !== 1) {
-    console.log('Name does not exist')
-    process.exit(1)
-  }
-  if (readBioFile(data, nameArg) !== null) {
-    console.log(`${viewFile.name} is a ${viewFile.age} year old ${viewFile.sex === 'f'.toLowerCase() ? 'female' : 'male'}.
-Height is ${viewFile.height} in inches and ${viewFile.height * 2.54} in centimeters.
-Weight is ${viewFile.weight} in pounds and ${viewFile.weight * 0.45359237} in kilograms.
-    `)
-  }
-}
-if (option === '-u') {
-  if (nameArg === undefined || sexArg === undefined || ageArg === undefined
-    || heightArg === undefined || weightArg === undefined || process.argv.length > 8) {
-    console.log('Cannot perform option with inputted arguments.')
-    process.exit(1)
-  }
-  let found = 0
-  for (let i = 0; i < data.length; i += 1) {
-    if (data[i].name.toUpperCase() === nameArg.toUpperCase()) {
-      found = 1
-    }
-  }
-  if (found !== 1) {
-    console.log('Name does not exist')
-    process.exit(1)
-  }
-  if (sexArg !== 'f' && sexArg !== 'F' && sexArg !== 'm' && sexArg !== 'M') {
-    console.log('Incorrect sex')
-    process.exit(1)
-  }
-  if (!(ageArg >= 18)) {
-    console.log('Age not a number or underaged')
-    process.exit(1)
-  }
-  if (!(Number(heightArg))) {
-    console.log('Height not a number')
-    process.exit(1)
-  }
-  if (!(Number(weightArg))) {
-    console.log('Weight not a number')
-    process.exit(1)
-  }
-  const updatedDetails = updateBioFile(data, new Bio(nameArg, sexArg, ageArg, heightArg, weightArg))
-  if (updatedDetails !== null) {
-    writeCSVFile('biostats.csv', updatedDetails)
-    console.log('Updated File Successfully')
-  }
-}
-if (option === '-d') {
-  if (nameArg === undefined || process.argv.length > 4) {
-    console.log('Cannot perform option with inputted arguments.')
-    process.exit(1)
-  }
-  let found = 0
-  for (let i = 0; i < data.length; i += 1) {
-    if (data[i].name.toUpperCase() === nameArg.toUpperCase()) {
-      found = 1
-    }
-  }
-  if (found !== 1) {
-    console.log('Name does not exist')
-    process.exit(1)
-  }
-  writeCSVFile('biostats.csv', deleteBioFile(data, nameArg))
-  console.log('Deleted File Successfully')
+} catch (error) {
+  console.log(error.toString())
 }
